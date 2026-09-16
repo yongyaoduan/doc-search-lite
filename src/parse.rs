@@ -42,12 +42,20 @@ pub fn extract(path: &Path) -> Result<Vec<Section>> {
             let mut sections = Vec::new();
             for page in doc.get_pages().keys() {
                 let mut text = String::new();
-                pdf_extract::output_doc_page(
-                    &doc,
-                    &mut pdf_extract::PlainTextOutput::new(&mut text),
-                    *page,
-                )
-                .with_context(|| format!("cannot extract PDF page {page}"))?;
+                // The layout extractor supports form XObjects but not all named CJK
+                // encodings. Its underlying PDF parser can decode those encodings.
+                let extracted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    pdf_extract::output_doc_page(
+                        &doc,
+                        &mut pdf_extract::PlainTextOutput::new(&mut text),
+                        *page,
+                    )
+                }));
+                if !matches!(extracted, Ok(Ok(()))) {
+                    text = doc
+                        .extract_text(&[*page])
+                        .with_context(|| format!("cannot extract PDF page {page}"))?;
+                }
                 sections.push(Section {
                     location: format!("page {page}"),
                     text,

@@ -5,6 +5,7 @@ Python is a build/CI test driver, never part of the installed application.
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -40,6 +41,7 @@ def fixtures(folder):
         "xl/worksheets/sheet1.xml": '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="3"><c r="A3" t="inlineStr"><is><t>项目 budget</t></is></c><c r="B3" t="inlineStr"><is><t>金额</t></is></c></row><row r="4"><c r="A4" t="s"><v>0</v></c><c r="B4"><v>125000</v></c><c r="C4"><f>B4*2</f><v>250000</v></c></row></sheetData></worksheet>',
     })
     pdf(folder / "文字 PDF.pdf")
+    shutil.copyfile(Path(__file__).parent / "fixtures/chinese-text.pdf", folder / "中文编码.pdf")
 
 
 def pdf(path, blank=False):
@@ -101,7 +103,7 @@ def main():
 
         started = time.perf_counter()
         first = run("index", docs)
-        assert first["imported"] == 4 and not first["errors"], first
+        assert first["imported"] == 5 and not first["errors"], first
         cases = [("验收标准", ".docx", "document", "submarine"),
                  ("SUBMARINE", ".docx", "document", "验收"),
                  ("HN-2026", ".docx", "document", "& 合作方"),
@@ -110,7 +112,8 @@ def main():
                  ("设备采购", ".xlsx", "row 4", "250000"),
                  ("procurement", ".xlsx", "项目预算", "金额"),
                  ("Broadband", ".pdf", "page 1", "maintenance"),
-                 ("海底光缆维护", ".pdf", "page 2", "海底光缆维护")]
+                 ("海底光缆维护", ".pdf", "page 2", "海底光缆维护"),
+                 ("维护中文手册", ".pdf", "page 1", "maintenance handbook")]
         for query, suffix, location, expected in cases:
             results = run("search", query)["results"]
             assert any(r["path"].endswith(suffix) and location in r["location"] and expected in r["text"] for r in results), (query, results)
@@ -118,8 +121,8 @@ def main():
         run("search", '" OR *')  # Input is always tokenized, never injected into FTS syntax.
         assert len(run("search", "海底", "--limit", "1")["results"]) == 1
         run("search", "海底", "--limit", "0", ok=False)
-        assert run("index", docs)["skipped"] == 4
-        assert run("index", docs, "--force")["imported"] == 4
+        assert run("index", docs)["skipped"] == 5
+        assert run("index", docs, "--force")["imported"] == 5
         note = docs / "updates.txt"
         note.write_text("obsoletekeyword " + "数据资料 " * 500, encoding="utf-8")
         assert run("index", docs)["imported"] == 1
@@ -136,15 +139,15 @@ def main():
         pdf(docs / "扫描件.pdf", blank=True)
         failure = run("index", docs, ok=False)
         assert len(failure["errors"]) == 2, failure
-        assert run("status")["documents"] == 4
+        assert run("status")["documents"] == 5
         # An updated file that can no longer be parsed must not leave stale evidence.
         (docs / "合同 Word.docx").write_bytes(b"broken now")
         run("index", docs, ok=False)
         assert not run("search", "submarine")["results"]
-        assert run("remove", docs)["removed"] == 3
+        assert run("remove", docs)["removed"] == 4
         assert run("status")["chunks"] == 0
         assert (docs / "预算 Excel.xlsx").exists()
-        print(f"PASS: installed binary, Chinese/English DOCX/XLSX/PPTX/PDF, citations, incremental updates, errors, bounded output ({time.perf_counter()-started:.2f}s)")
+        print(f"PASS: portable binary, Chinese/English DOCX/XLSX/PPTX/PDF, citations, incremental updates, errors, bounded output ({time.perf_counter()-started:.2f}s)")
 
 
 if __name__ == "__main__":

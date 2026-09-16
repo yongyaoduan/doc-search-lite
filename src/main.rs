@@ -165,8 +165,13 @@ fn index(db: &mut Connection, input: &Path, force: bool) -> Result<()> {
             continue;
         }
         eprintln!("Indexing {}", path.display());
+        // Some document libraries panic on unsupported input. Report failures as
+        // ordinary file errors; a successful PDF fallback should not print a panic.
+        let panic_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
         let result = std::panic::catch_unwind(|| parse::extract(&path))
             .unwrap_or_else(|_| Err(anyhow::anyhow!("document parser panicked")));
+        std::panic::set_hook(panic_hook);
         let sections = match result {
             Ok(sections) => sections,
             Err(error) => {
